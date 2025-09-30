@@ -1,0 +1,25 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "noEmit": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@app/*": ["app/*"],
+      "@/components/*": ["app/components/*"],
+      "@/hooks/*": ["hooks/*", "app/hooks/*"],
+      "@/constants/*": ["app/constants/*"]
+    },
+
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["react", "react-native"]
+  }
+}
