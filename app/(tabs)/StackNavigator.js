@@ -1,11 +1,11 @@
-// app/(tabs)/StackNavigator.js
+import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import UsersListScreen from '../screens/UsersListScreen';
 import UserDetailScreen from '../screens/UserDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
-export default function StackNavigator() {
+function StackNavigatorImpl() {
   return (
     <Stack.Navigator>
       <Stack.Screen name="UsersList" component={UsersListScreen} options={{ title: 'Users' }} />
@@ -13,3 +13,5 @@ export default function StackNavigator() {
     </Stack.Navigator>
   );
 }
+
+export default React.memo(StackNavigatorImpl);

@@ -1,39 +1,102 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  memo,
+} from 'react';
+import {
+  View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity,
+} from 'react-native';
 
-const UserItem = ({ user, onPress }) => (
+// ----- Pure, memoized leaf components -----
+const Separator = memo(() => <View style={styles.separator} />);
+
+const Loading = memo(() => (
+  <View style={styles.loading}>
+    <ActivityIndicator size="large" />
+    <Text>Loading users...</Text>
+  </View>
+));
+
+// Compare only what matters to avoid unnecessary re-renders
+const areUserItemEqual = (prev, next) =>
+  prev.user?.id === next.user?.id &&
+  prev.user?.name === next.user?.name &&
+  prev.user?.email === next.user?.email &&
+  prev.onPress === next.onPress;
+
+const UserItemBase = ({ user, onPress }) => (
   <TouchableOpacity onPress={() => onPress(user)} style={styles.userItem}>
     <Text style={styles.name}>{user.name}</Text>
     <Text style={styles.email}>{user.email}</Text>
   </TouchableOpacity>
 );
+const UserItem = memo(UserItemBase, areUserItemEqual);
 
-const Loading = () => (
-  <View style={styles.loading}>
-    <ActivityIndicator size="large" />
-    <Text>Loading users...</Text>
-  </View>
-);
-
+// ----- Screen -----
 export default function UsersListScreen({ navigation }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const usersRef = useRef([]);            // keep last data (no re-render)
+  const listRef = useRef(null);           // FlatList ref for imperatives
+  const isMountedRef = useRef(true);      // avoid setState after unmount
 
+  const [users, setUsers] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
+
+  // Fetch once
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch('https://jsonplaceholder.typicode.com/users');
         if (!res.ok) throw new Error('Network response was not ok');
         const data = await res.json();
-        setUsers(data);
+        if (isMountedRef.current) {
+          setUsers(data);
+          usersRef.current = data;
+        }
       } catch (e) {
-        setError(e.message);
+        if (isMountedRef.current) setError(e.message);
       } finally {
-        setLoading(false);
+        if (isMountedRef.current) setLoading(false);
       }
     })();
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
+
+  // Derived data (e.g., alphabetized) without recomputing
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => a.name.localeCompare(b.name));
+  }, [users]);
+
+  // Header reacts to count instantly (layout phase for smoother updates)
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: `Users (${sortedUsers.length})`,
+    });
+  }, [navigation, sortedUsers.length]);
+
+  // Stable callbacks
+  const keyExtractor = useCallback((item) => String(item.id), []);
+  const goToDetails = useCallback(
+    (user) => navigation.navigate('UserDetail', { user }),
+    [navigation]
+  );
+  const renderItem = useCallback(
+    ({ item }) => <UserItem user={item} onPress={goToDetails} />,
+    [goToDetails]
+  );
+
+  // When data changes, scroll to top once
+  useEffect(() => {
+    if (sortedUsers.length > 0 && listRef.current) {
+      listRef.current.scrollToOffset({ offset: 0, animated: false });
+    }
+  }, [sortedUsers.length]);
 
   if (loading) return <Loading />;
 
@@ -45,19 +108,22 @@ export default function UsersListScreen({ navigation }) {
     );
   }
 
-  const goToDetails = (user) => {
-    // PASS the selected user as params
-    navigation.navigate('UserDetail', { user });
-  };
-
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Users List</Text>
+
       <FlatList
-        data={users}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => <UserItem user={item} onPress={goToDetails} />}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ref={listRef}
+        data={sortedUsers}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        ItemSeparatorComponent={Separator}
+        // RN FlatList perf hints:
+        removeClippedSubviews
+        initialNumToRender={10}
+        windowSize={5}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
       />
     </View>
   );
